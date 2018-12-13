@@ -34,6 +34,37 @@ game = hlt.Game()
 # At this point "game" variable is populated with initial map data.
 # This is a good place to do computationally expensive start-up pre-processing.
 # As soon as you call "ready" function below, the 2 second per turn timer will start.
+me = game.me
+game_map = game.game_map
+
+occ_arr = np.zeros((game_map.width,game_map.height))
+hlt_amt = np.zeros((game_map.width,game_map.height))
+
+def get_info(game_map, occ_arr, hlt_amt):
+    for y in range(game_map.height):
+         for x in range(game_map.width):
+            this_cell = game_map[hlt.Position(x, y)]
+            occ_arr[x,y] = this_cell.is_occupied
+            hlt_amt[x,y] = this_cell.halite_amount
+    return occ_arr, hlt_amt
+
+
+direction_order = [Direction.North, Direction.South, Direction.East, Direction.West, Direction.Still]
+ship_max_hlt = constants.MAX_HALITE
+max_turns = constants.MAX_TURNS
+ship_cost = constants.SHIP_COST
+yard = [me.shipyard.position.x,me.shipyard.position.y]
+
+# logging.debug("yard: {}".format(yard))
+
+def move_ship(ship,occ_arr,hlt_amt):
+    ship_state = occ_arr[ship.position] 
+    
+
+
+
+
+
 game.ready("BBCMicroTurtle_v2")
 
 # Now that your bot is initialized, save a message to yourself in the log file with some important information.
@@ -48,40 +79,25 @@ while True:
     game.update_frame()
 
     # You extract player metadata and the updated map metadata here for convenience.
-    me = game.me
-    game_map = game.game_map
-    # game_cell = hlt.game_map.MapCell()
-    occupied_map = {}
-    # tp_dic ={}
-    occ_arr = np.zeros((game_map.width,game_map.height))
-    # tp_arr = np.zeros((game_map.width,game_map.height))
 
-    for y in range(game_map.height):
-         for x in range(game_map.width):
-            this_cell = game_map[hlt.Position(x, y)]
-            occ_arr[x,y] = this_cell.is_occupied
-            # tp_arr[x,y] = type(this_cell.structure_type)
-            # tp_dic[x,y] = this_cell.structure_type
-            
-            # occupied_map[x,y] = this_cell.is_occupied
-            # logging.debug("in x:{}, y:{}, is occupied: {}".format(x,y,hlt.game_map.MapCell(x,y).is_occupied()))
-            # logging.debug("x: {}, y {}, game map cell {}.".format(x,y,this_cell.is_occupied))          
-    # for row in occ_arr:
+    occ_arr, hlt_amt = get_info(game_map, occ_arr, hlt_amt)
+    logging.debug(me.halite_amount)
+
+    # making my ships == 2 and competitior ships == 1 
     for ship in me.get_ships():
         occ_arr[ship.position.x,ship.position.y] = 2
         # logging.debug("shipposition: {}".format(ship.position))
-    logging.debug("occupied array{}".format(occ_arr))
-    # logging.debug("tp array{}".format(tp_arr))
-    # logging.debug("tp dic{}".format(tp_dic))
-    
-    # logging.debug("occupied map{}".format(occupied_map))
-    # 
+    # logging.debug("occupied array {}".format(occ_arr))
+    # logging.debug("halite ammount {}".format(hlt_amt))
 
+    drops = me.get_dropoffs()
+    yard = me.shipyard.position.x
+    logging.debug("drop_off location {} and yard {}".format(drops,yard))
+   
     # A command queue holds all the commands you will run this turn. You build this list up and submit it at the
     #   end of the turn.
     command_queue = []
 
-    direction_order = [Direction.North, Direction.South, Direction.East, Direction.West, Direction.Still]
     position_choices = []
     
     if game.turn_number <= (constants.MAX_TURNS- 10):
@@ -90,7 +106,7 @@ while True:
                 ship_states[ship.id] =  "collecting"
     
             position_options = ship.position.get_surrounding_cardinals() + [ship.position]        
-            
+            logging.debug("This ship position: {}, and occ_array {}".format(ship.position, occ_arr[ship.position.x,ship.position.y]))
             # {(0,1):(19,38)}
             position_dict = {}
 
@@ -138,10 +154,12 @@ while True:
 
     else:
          for ship in me.get_ships():
-                move = game_map.navigate(ship, me.shipyard.position)
+                move = game_map.naive_navigate(ship, me.shipyard.position)
                 position_choices.append(position_dict[move]) 
                 command_queue.append(ship.move(move))
-                
+
+
+         
     # Send your moves back to the game environment, ending this turn.
     game.end_turn(command_queue)
 
