@@ -16,7 +16,7 @@ import random
 # Logging allows you to save messages for yourself. This is required because the regular STDOUT
 #   (print statements) are reserved for the engine-bot communication.
 import logging
-
+logging.basicConfig(filename='mybot_v1.log', filemode='w', level=logging.DEBUG)
 """ <<<Game Begin>>> """
 
 # This game object contains the initial game state.
@@ -51,7 +51,9 @@ while True:
             ship_states[ship.id] =  "collecting"
 
         position_options = ship.position.get_surrounding_cardinals() + [ship.position]        
-        
+        logging.debug("position options {}".format(position_options))
+        for pos in position_options:
+            logging.debug("pos x:{} y:{}".format(pos.x,pos.y))
         # {(0,1):(19,38)}
         position_dict = {}
 
@@ -82,6 +84,7 @@ while True:
  
         elif ship_states[ship.id] == 'collecting':        
             directional_choice = max(halite_dict, key=halite_dict.get)
+            logging.debug("directional choice = {}".format(directional_choice))
             position_choices.append(position_dict[directional_choice]) 
             command_queue.append(ship.move(directional_choice))
 
