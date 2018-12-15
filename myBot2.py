@@ -50,6 +50,8 @@ drops = me.get_dropoffs()
 drops.append(yard)
 logging.debug("drops {}".format(drops))
 
+ship_states = {}
+
 def get_info(game_map, occ_arr, hlt_amt,me):
     for y in range(game_map.height):
          for x in range(game_map.width):
@@ -61,33 +63,39 @@ def get_info(game_map, occ_arr, hlt_amt,me):
     return occ_arr, hlt_amt
 
 
-ship_states = {}
-
 def create_ship_states(me,ship_states):
     '''
     Test the ship and decide collecting or depositing or something else in future
     '''
     for ship in me.get_ships():
         if ship not in ship_states:
-            ship_states[ship.id] == "collecting"
+            ship_states[ship.id] = "collecting"
         if ship.halite_amount >= constants.MAX_HALITE *.9:
-            ship_states[ship.id] == "depositing"
+            ship_states[ship.id] = "depositing"
+
+        logging.info("ship_states{}".format(ship_states))
     return ship_states
 
 def f1(d1):  
-     v=list(d1.values())
-     k=list(d1.keys())
-     return k[v.index(max(v))]
+    v=list(d1.values())
+    k=list(d1.keys())
+    return k[v.index(max(v))]
 
 def movement(ship,ship_states,occ_arr,hlt_amt,drops,yard):
     if ship_states[ship.id] == "collecting":
         position_options = ship.position.get_surrounding_cardinals() + [ship.position]
+        logging.debug('position_options {}'.format(position_options))
+        
         choice_dic = {}
         for pos in position_options:
-            choice_dic[pos] = hlt_amt[pos.x,pos.y]
-            directional_choice = f1(choice_dic)
-    return (ship.move(directional_choice))   
-
+            choice_dic[(pos.x,pos.y)] = hlt_amt[pos.x,pos.y]
+            logging.debug("Choice dic before f1{}".format(choice_dic))
+        directional_choice = f1(choice_dic)
+        direction_x = np.sign(directional_choice.x - ship.position.x)
+        direction_y = np.sign(directional_choice.y - ship.position.y)
+        #direction choice is the position in the space not vs the original position
+        logging.debug("directional Choice x:{} y:{}".format((direction_x),(direction_y)))
+    return ship.move((direction_x,direction_y))
 
    
 game.ready("BBCMicroTurtle_v2")
@@ -108,12 +116,15 @@ while True:
     occ_arr, hlt_amt = get_info(game_map, occ_arr, hlt_amt, me)
     logging.debug("I have this much halite: {}".format(me.halite_amount))
 
-
+    
     ship_states = create_ship_states(me,ship_states)
+
     for ship in me.get_ships():
         command_queue.append(movement(ship,ship_states,occ_arr,hlt_amt,drops,yard))
    
+    logging.debug("command_queue: {}".format(command_queue))
     if game.turn_number <= 200 and me.halite_amount >= constants.SHIP_COST and not game_map[me.shipyard].is_occupied:
+        logging.info("generate ship")
         command_queue.append(me.shipyard.spawn())
     # making my ships == 2 and competitior shnment, ending this turn.
     game.end_turn(command_queue)

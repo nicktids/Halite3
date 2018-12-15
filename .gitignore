@@ -9,10 +9,5 @@ __pycache__/
 *.class
 *.ipr
 *.iws
-.hlt
-/hlt
-.log
-halite.exe
-.bat
+/hlt/
 /replays/
-*.ipynb
