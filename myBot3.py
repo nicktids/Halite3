@@ -19,7 +19,7 @@ import pandas as pd
 # Logging allows you to save messages for yourself. This is required because the regular STDOUT
 #   (print statements) are reserved for the engine-bot communication.
 import logging
-logging.basicConfig(filename='mybot2.log', filemode='w', level=logging.DEBUG)
+logging.basicConfig(filename='mybot3.log', filemode='w', level=logging.DEBUG)
 """ <<<Game Begin>>> """
 
 # This game object contains the initial game state.
@@ -62,35 +62,76 @@ def create_ship_states(me,ship_states):
     for ship in me.get_ships():
         if ship not in ship_states:
             ship_states[ship.id] = "collecting"
-        if ship.halite_amount >= constants.MAX_HALITE *.9:
+        if ship.halite_amount >= constants.MAX_HALITE *.8:
             ship_states[ship.id] = "depositing"
 
-        logging.info("ship_states{}".format(ship_states))
+    logging.info("ship_states{}".format(ship_states))
     return ship_states
 
-def f1(d1):  
-    v=list(d1.values())
-    k=list(d1.keys())
-    return k[v.index(max(v))]
+def sort_dic(x):  
+    return sorted(x.items(),reverse=True, key=lambda kv: kv[1])
 
+def space_free(ship,choice_dic,occ_arr):
+    '''
+    Returns where to go and 
+    '''
+    logging.debug("I did get here {},{}".format(choice_dic,occ_arr))
+    for key,v in choice_dic.items():
+        
+
+        logging.debug("key: {}".format(key))
+
+        if occ_arr[key[0],key[1]] > 0 and choice_dic(key) != (ship.position.x,ship.position.y):
+            choice_dic.pop(key)
+            logging.debug("popped a value{}".format(key))
+
+    logging.debug("Choice_dice nowwww: {}".format(choice_dic))
+    return choice_dic
+
+
+
+
+# note making the retun and to check if occupied or not.
 def movement(ship,ship_states,occ_arr,hlt_amt,drops,yard):
     if ship_states[ship.id] == "collecting":
         position_options = ship.position.get_surrounding_cardinals() + [ship.position]
         logging.debug('position_options {}'.format(position_options))
         
         choice_dic = {}
+
         for pos in position_options:
             choice_dic[(pos.x,pos.y)] = hlt_amt[pos.x,pos.y]
-            logging.debug("Choice dic before f1{}".format(choice_dic))
-        directional_choice = f1(choice_dic)
-        direction_x = np.sign(directional_choice.x - ship.position.x)
-        direction_y = np.sign(directional_choice.y - ship.position.y)
+        logging.debug("Choice dic before removing occupied{}".format(choice_dic))
+        choice_list = space_free(ship,choice_dic,occ_arr)
+        
+        logging.debug("Choice dic before sort{}".format(choice_list))
+        directional_choice = sort_dic(choice_dic)[1][0]
+        logging.debug("Choice dic after sort{}".format(directional_choice))
+
+        direction_x = np.sign(directional_choice[0] - ship.position.x)
+        direction_y = np.sign(directional_choice[1] - ship.position.y)
         #direction choice is the position in the space not vs the original position
         logging.debug("directional Choice x:{} y:{}".format((direction_x),(direction_y)))
+
+    elif ship_states[ship.id]  == "depositing":
+        logging.info("yard position {}".format(yard))
+        to_yard = [ship.position.x,ship.position.y]
+        to_yard = np.sign(to_yard)
+        direction_x = to_yard[0]
+        direction_y = to_yard[1]
+        if to_yard.sum() == 2:
+            direction_y = 0
+        elif to_yard.sum() == 0:
+            ship_states[ship.id] ="collecting"
+            return movement(ship,ship_states,occ_arr,hlt_amt,drops,yard)
+
+    logging.debug("directional Choice x:{} y:{}".format((direction_x),(direction_y)))
+    logging.info("yard position {}".format(yard))
+
     return ship.move((direction_x,direction_y))
 
    
-game.ready("BBCMicroTurtle_v2")
+game.ready("BBCMicroTurtle_v3")
 
 # Now that your bot is initialized, save a message to yourself in the log file with some important information.
 #   Here, you log here your id, which you can always fetch from the game object by using my_id.
@@ -115,6 +156,7 @@ while True:
         command_queue.append(movement(ship,ship_states,occ_arr,hlt_amt,drops,yard))
    
     logging.debug("command_queue: {}".format(command_queue))
+
     if game.turn_number <= 200 and me.halite_amount >= constants.SHIP_COST and not game_map[me.shipyard].is_occupied:
         logging.info("generate ship")
         command_queue.append(me.shipyard.spawn())
