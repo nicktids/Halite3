@@ -34,7 +34,7 @@ occ_arr = np.zeros((game_map.width,game_map.height))
 hlt_amt = np.zeros((game_map.width,game_map.height))
 
 direction_order = [Direction.North, Direction.South, Direction.East, Direction.West, Direction.Still]
-ship_max_hlt = constants.MAX_HALITE
+ship_max_hlt = constants.MAX_HALITE *.8
 max_turns = constants.MAX_TURNS
 ship_cost = constants.SHIP_COST
 yard = [me.shipyard.position.x,me.shipyard.position.y]
@@ -55,15 +55,26 @@ def get_info(game_map, occ_arr, hlt_amt,me):
     return occ_arr, hlt_amt
 
 
-def create_ship_states(me,ship_states):
+def create_ship_states(me,ship_states,yard):
     '''
     Test the ship and decide collecting or depositing or something else in future
     '''
+    logging.info("ship_states before {}".format(ship_states))
     for ship in me.get_ships():
         if ship not in ship_states:
             ship_states[ship.id] = "collecting"
-        if ship.halite_amount >= constants.MAX_HALITE *.8:
+
+    for ship in me.get_ships():
+        if ship.halite_amount > ship_max_hlt:
+            logging.debug("ship.id: {}, ship hlt: {}".format(ship.id,ship.halite_amount))
             ship_states[ship.id] = "depositing"
+
+    # for ship in ship_states:
+    #     if ship.halite_amount > ship_max_hlt:
+    #         logging.debug("ship.id: {}, ship max hlt".format(ship.id,ship_max_hlt))
+    #         ship_states[ship.id] = "depositing"
+    #     elif (ship.position.x,ship.position.y) == yard:
+    #         ship_states[ship.id] = "collecting"
 
     logging.info("ship_states{}".format(ship_states))
     return ship_states
@@ -75,60 +86,76 @@ def space_free(ship,choice_dic,occ_arr):
     '''
     Returns where to go and 
     '''
-    logging.debug("I did get here {},{}".format(choice_dic,occ_arr))
+    logging.debug("shipposition: {},halite at ship {}, \n {}".format(ship.position,ship.halite_amount,occ_arr))
+    
+    new_occ ={}
     for key,v in choice_dic.items():
-        
-
-        logging.debug("key: {}".format(key))
-
-        if occ_arr[key[0],key[1]] > 0 and choice_dic(key) != (ship.position.x,ship.position.y):
-            choice_dic.pop(key)
-            logging.debug("popped a value{}".format(key))
-
-    logging.debug("Choice_dice nowwww: {}".format(choice_dic))
-    return choice_dic
-
-
+    
+        # logging.debug("key: {}".format(key))
+        # logging.debug("normalised key: {}".format(game_map.normalize(Position(key))))
+       
+        if occ_arr[key[0],key[1]] == 0 and key != (ship.position.x,ship.position.y):
+            new_occ[key] = v
+            # logging.debug("new_occ: {}".format(new_occ))
+        new_occ[(ship.position.x,ship.position.y)] = choice_dic[(ship.position.x,ship.position.y)] *3
+    logging.debug("Choice_dice nowwww: {}".format(new_occ))
+    return new_occ
 
 
-# note making the retun and to check if occupied or not.
+
+
 def movement(ship,ship_states,occ_arr,hlt_amt,drops,yard):
     if ship_states[ship.id] == "collecting":
         position_options = ship.position.get_surrounding_cardinals() + [ship.position]
         logging.debug('position_options {}'.format(position_options))
         
         choice_dic = {}
-
+        choice_new ={}
         for pos in position_options:
             choice_dic[(pos.x,pos.y)] = hlt_amt[pos.x,pos.y]
         logging.debug("Choice dic before removing occupied{}".format(choice_dic))
-        choice_list = space_free(ship,choice_dic,occ_arr)
+        choice_new = space_free(ship,choice_dic,occ_arr)
         
-        logging.debug("Choice dic before sort{}".format(choice_list))
-        directional_choice = sort_dic(choice_dic)[1][0]
+        logging.debug("Choice dic before sort{}".format(choice_new))
+        directional_choice = sort_dic(choice_new)[0][0]
         logging.debug("Choice dic after sort{}".format(directional_choice))
 
         direction_x = np.sign(directional_choice[0] - ship.position.x)
         direction_y = np.sign(directional_choice[1] - ship.position.y)
         #direction choice is the position in the space not vs the original position
-        logging.debug("directional Choice x:{} y:{}".format((direction_x),(direction_y)))
-
     elif ship_states[ship.id]  == "depositing":
-        logging.info("yard position {}".format(yard))
-        to_yard = [ship.position.x,ship.position.y]
-        to_yard = np.sign(to_yard)
-        direction_x = to_yard[0]
-        direction_y = to_yard[1]
-        if to_yard.sum() == 2:
-            direction_y = 0
-        elif to_yard.sum() == 0:
+        logging.info("Going back to base")
+        logging.info("yard position {}, ship: {}".format(yard, ship.position))
+        to_yard = [yard[0]- ship.position.x  ,yard[1] - ship.position.y]
+        to_yard = (np.sign(to_yard[0]),np.sign(to_yard[1]))
+        logging.info("to yard {}".format(to_yard))
+
+
+        if to_yard[0] != 0 and to_yard[1] !=0:
+            x = np.random.choice(2)
+            if x == 0:
+                direction_x = to_yard[0]
+                direction_y = 0
+            else:
+                direction_x = 0
+                direction_y = to_yard[1]
+        elif to_yard[0] == 0 and to_yard[1] ==0:
             ship_states[ship.id] ="collecting"
+            logging.info("Ship at yard so making collect")
             return movement(ship,ship_states,occ_arr,hlt_amt,drops,yard)
+        else:
+            direction_x = to_yard[0]
+            direction_y = to_yard[1]           
 
-    logging.debug("directional Choice x:{} y:{}".format((direction_x),(direction_y)))
-    logging.info("yard position {}".format(yard))
 
-    return ship.move((direction_x,direction_y))
+        directional_choice = (direction_x + ship.position.x ,direction_y +ship.position.y)
+
+    logging.debug("ship state {}, directional Choice x:{} y:{}".format(ship_states[ship.id],(direction_x),(direction_y)))
+
+    occ_arr[ship.position.x,ship.position.y] = 0
+    occ_arr[directional_choice[0],directional_choice[1]] = 2
+
+    return ship.move((direction_x,direction_y)), occ_arr
 
    
 game.ready("BBCMicroTurtle_v3")
@@ -150,10 +177,11 @@ while True:
     logging.debug("I have this much halite: {}".format(me.halite_amount))
 
     
-    ship_states = create_ship_states(me,ship_states)
+    ship_states = create_ship_states(me,ship_states,yard)
 
     for ship in me.get_ships():
-        command_queue.append(movement(ship,ship_states,occ_arr,hlt_amt,drops,yard))
+        move_this, occ_arr = movement(ship,ship_states,occ_arr,hlt_amt,drops,yard)
+        command_queue.append(move_this)
    
     logging.debug("command_queue: {}".format(command_queue))
 
