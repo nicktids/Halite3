@@ -52,6 +52,7 @@ def get_info(game_map, occ_arr, hlt_amt,me):
             hlt_amt[x,y] = this_cell.halite_amount
     for ship in me.get_ships():
         occ_arr[ship.position.x,ship.position.y] = 2
+    occ_arr[yard[0],yard[1]] =0
     return occ_arr, hlt_amt
 
 
@@ -65,28 +66,23 @@ def create_ship_states(me,ship_states,yard):
             ship_states[ship.id] = "collecting"
 
     for ship in me.get_ships():
-        if ship.halite_amount > ship_max_hlt:
+        if ship.halite_amount >= ship_max_hlt:
             logging.debug("ship.id: {}, ship hlt: {}".format(ship.id,ship.halite_amount))
             ship_states[ship.id] = "depositing"
-
-    # for ship in ship_states:
-    #     if ship.halite_amount > ship_max_hlt:
-    #         logging.debug("ship.id: {}, ship max hlt".format(ship.id,ship_max_hlt))
-    #         ship_states[ship.id] = "depositing"
-    #     elif (ship.position.x,ship.position.y) == yard:
-    #         ship_states[ship.id] = "collecting"
-
     logging.info("ship_states{}".format(ship_states))
     return ship_states
 
 def sort_dic(x):  
     return sorted(x.items(),reverse=True, key=lambda kv: kv[1])
 
-def space_free(ship,choice_dic,occ_arr):
+def sort_dic_depo(x):  
+    return sorted(x.items(), key=lambda kv: kv[1])
+
+def space_free(ship,choice_dic,occ_arr,ship_states):
     '''
     Returns where to go and 
     '''
-    logging.debug("shipposition: {},halite at ship {}, \n {}".format(ship.position,ship.halite_amount,occ_arr))
+    logging.debug("ship position: {},halite at ship {}, \n {}".format(ship.position,ship.halite_amount,occ_arr))
     
     new_occ ={}
     for key,v in choice_dic.items():
@@ -97,7 +93,10 @@ def space_free(ship,choice_dic,occ_arr):
         if occ_arr[key[0],key[1]] == 0 and key != (ship.position.x,ship.position.y):
             new_occ[key] = v
             # logging.debug("new_occ: {}".format(new_occ))
-        new_occ[(ship.position.x,ship.position.y)] = choice_dic[(ship.position.x,ship.position.y)] *3
+        if ship_states[ship.id] == "collecting":
+            new_occ[(ship.position.x,ship.position.y)] = choice_dic[(ship.position.x,ship.position.y)] *3
+        elif new_occ =={}:
+            new_occ[(ship.position.x,ship.position.y)] = 1000
     logging.debug("Choice_dice nowwww: {}".format(new_occ))
     return new_occ
 
@@ -105,19 +104,32 @@ def space_free(ship,choice_dic,occ_arr):
 
 
 def movement(ship,ship_states,occ_arr,hlt_amt,drops,yard):
+    choice_dic = {}
+    choice_new ={}
+    logging.debug('start movement ship.id: {}, ship_state {}'.format(ship.id,ship_states[ship.id]))
+        
     if ship_states[ship.id] == "collecting":
-        position_options = ship.position.get_surrounding_cardinals() + [ship.position]
+        position_opts = ship.position.get_surrounding_cardinals() + [ship.position]
+        position_options =[]
+        for pos in position_opts:
+            position_options.append(game_map.normalize(pos))
+        
         logging.debug('position_options {}'.format(position_options))
         
-        choice_dic = {}
-        choice_new ={}
+
         for pos in position_options:
             choice_dic[(pos.x,pos.y)] = hlt_amt[pos.x,pos.y]
         logging.debug("Choice dic before removing occupied{}".format(choice_dic))
-        choice_new = space_free(ship,choice_dic,occ_arr)
+        choice_new = space_free(ship,choice_dic,occ_arr,ship_states)
         
         logging.debug("Choice dic before sort{}".format(choice_new))
-        directional_choice = sort_dic(choice_new)[0][0]
+        sorted_dic={}
+        sorted_dic = sort_dic(choice_new)
+        if len(sorted_dic) >=2 and sorted_dic[0][1] <=10:
+            directional_choice =sorted_dic[1][0]
+        else:
+            directional_choice =sorted_dic[0][0]
+        # directional_choice = sort_dic(choice_new)[0][0]
         logging.debug("Choice dic after sort{}".format(directional_choice))
 
         direction_x = np.sign(directional_choice[0] - ship.position.x)
@@ -131,21 +143,40 @@ def movement(ship,ship_states,occ_arr,hlt_amt,drops,yard):
         logging.info("to yard {}".format(to_yard))
 
 
-        if to_yard[0] != 0 and to_yard[1] !=0:
-            x = np.random.choice(2)
-            if x == 0:
-                direction_x = to_yard[0]
-                direction_y = 0
-            else:
-                direction_x = 0
-                direction_y = to_yard[1]
-        elif to_yard[0] == 0 and to_yard[1] ==0:
+        if [ship.position.x,ship.position.y] != yard:
+            # Add a loop to create a dic of choices and pass in to the space free
+            # x = np.random.choice(2)
+            choice_dic[ship.position.x + to_yard[0],ship.position.y] = hlt_amt[ship.position.x + to_yard[0],ship.position.y]
+            choice_dic[ship.position.x ,ship.position.y + to_yard[1]] = hlt_amt[ship.position.x ,ship.position.y+ to_yard[1]]
+            logging.debug("depo choice dic: {}".format(choice_dic))
+
+            choice_new = space_free(ship,choice_dic,occ_arr,ship_states)
+            logging.debug("depo choice new: {}".format(choice_new))
+            directional_choice = sort_dic_depo(choice_new)[0][0]
+            logging.debug("depo direction: {}, current pos: {}, yard: {}".format(directional_choice, ship.position, yard))
+            direction_x = np.sign(directional_choice[0] - ship.position.x)
+            direction_y = np.sign(directional_choice[1] - ship.position.y)
+
+            # if choice_new == ():
+            #     direction_x = 0
+            #     direction_x = 0
+            # else:
+            #     direction_x = np.sign(choice_new[0] - ship.position.x)
+            #     direction_y = np.sign(choice_new[1] - ship.position.y)
+        #     for x in [0,1]
+        #     if x == 0:
+        #         direction_x = to_yard[0]
+        #         direction_y = 0
+        #     else:
+        #         direction_x = 0
+        #         direction_y = to_yard[1]
+        else:
             ship_states[ship.id] ="collecting"
             logging.info("Ship at yard so making collect")
             return movement(ship,ship_states,occ_arr,hlt_amt,drops,yard)
-        else:
-            direction_x = to_yard[0]
-            direction_y = to_yard[1]           
+        # else:
+        #     direction_x = to_yard[0]
+        #     direction_y = to_yard[1]           
 
 
         directional_choice = (direction_x + ship.position.x ,direction_y +ship.position.y)
